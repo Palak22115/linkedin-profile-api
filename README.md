@@ -349,10 +349,10 @@ build to a distroless static image.
 - **`employmentType`, `industry`, company/school logos** are returned by
   LinkedIn as URNs and are not separately resolved (would need extra calls).
 - **Schema drift.** These are private endpoints; LinkedIn can change or retire
-  them without notice. The field mappings for the less common sections
-  (projects, volunteering, honors, publications, courses) are based on
-  LinkedIn's documented entity shapes but have had less real‑world validation
-  than experience / education / skills.
+  them without notice. Field mappings for experience, education, skills,
+  certifications, projects, courses and honors are validated against real
+  profiles; **languages, volunteering and publications** are mapped from
+  LinkedIn's entity shapes but have not yet been seen populated in testing.
 - **Single account = single throughput.** No account pool / rotation.
 
 ---

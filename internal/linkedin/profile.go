@@ -37,11 +37,14 @@ func (c *Client) CoreProfile(ctx context.Context, urn string) (json.RawMessage, 
 	return c.getJSON(ctx, path, nil)
 }
 
-// Section fetches one profile section collection by name.
+// Section fetches one profile section collection by name. count=100 pulls the
+// full list in a single request (the API otherwise pages at 20, e.g. skills).
 func (c *Client) Section(ctx context.Context, name, urn string) (json.RawMessage, error) {
 	q := url.Values{}
 	q.Set("q", "viewee")
 	q.Set("profileUrn", urn)
+	q.Set("start", "0")
+	q.Set("count", "100")
 	return c.getJSON(ctx, "/identity/dash/"+name, q)
 }
 

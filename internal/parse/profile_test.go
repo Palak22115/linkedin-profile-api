@@ -2,6 +2,7 @@ package parse
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/palak-kasoundhan/linkedin-profile-api/internal/linkedin"
@@ -128,6 +129,47 @@ func TestBuild(t *testing.T) {
 	// Languages: enum humanized
 	if len(p.Languages) != 1 || p.Languages[0].Proficiency != "Native or bilingual" {
 		t.Errorf("languages wrong: %+v", p.Languages)
+	}
+}
+
+// Fixtures below are trimmed from real identity/dash/* responses captured
+// during recon (certifications, projects, courses, honors — the sections that
+// only appear on richer profiles).
+func TestBuild_RicherSections(t *testing.T) {
+	raw := mkRaw(map[string]string{
+		"core": coreFixture,
+		"profileCertifications": `{"data":{"*elements":["urn:li:fsd_profileCertification:(C,1)"]},"included":[
+		 {"$type":"com.linkedin.voyager.dash.identity.profile.Certification","entityUrn":"urn:li:fsd_profileCertification:(C,1)",
+		  "name":"ISO 45001: 2018 ... Certified","authority":"TÜV SÜD","licenseNumber":"IN/18079/197576","url":null,
+		  "dateRange":{"start":{"month":10,"year":2022}}}]}`,
+		"profileProjects": `{"data":{"*elements":["urn:li:fsd_profileProject:(P,1)"]},"included":[
+		 {"$type":"com.linkedin.voyager.dash.identity.profile.Project","entityUrn":"urn:li:fsd_profileProject:(P,1)",
+		  "title":"HR policy and implementation at BPO","description":"Key learnings\r\n- a\r\n- b","dateRange":null}]}`,
+		"profileCourses": `{"data":{"*elements":["urn:li:fsd_profileCourse:(K,1)"]},"included":[
+		 {"$type":"com.linkedin.voyager.dash.identity.profile.Course","entityUrn":"urn:li:fsd_profileCourse:(K,1)",
+		  "name":"Financial Accounting from ILLINOIS","number":null}]}`,
+		"profileHonors": `{"data":{"*elements":["urn:li:fsd_profileHonor:(H,1)"]},"included":[
+		 {"$type":"com.linkedin.voyager.dash.identity.profile.Honor","entityUrn":"urn:li:fsd_profileHonor:(H,1)",
+		  "title":"1st position in Volleyball tournament","issuer":null,"issuedOn":{"month":3,"year":2022}}]}`,
+	}, "")
+
+	p, err := Build(raw, "u")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(p.Certifications) != 1 || p.Certifications[0].Authority != "TÜV SÜD" ||
+		p.Certifications[0].LicenseNumber != "IN/18079/197576" || p.Certifications[0].DateRange.Start.Month != 10 {
+		t.Errorf("certification: %+v", p.Certifications)
+	}
+	if len(p.Projects) != 1 || p.Projects[0].Name != "HR policy and implementation at BPO" ||
+		!strings.Contains(p.Projects[0].Description, "\n- a\n") {
+		t.Errorf("project: %+v", p.Projects)
+	}
+	if len(p.Courses) != 1 || p.Courses[0].Name != "Financial Accounting from ILLINOIS" {
+		t.Errorf("course: %+v", p.Courses)
+	}
+	if len(p.Honors) != 1 || p.Honors[0].Date == nil || p.Honors[0].Date.Year != 2022 {
+		t.Errorf("honor: %+v", p.Honors)
 	}
 }
 
