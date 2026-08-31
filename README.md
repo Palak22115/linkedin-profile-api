@@ -158,6 +158,9 @@ curl -s -H "X-API-Key: secret" \
 
 #### Example response (truncated)
 
+Full, unedited example: [`docs/sample-response.json`](docs/sample-response.json)
+(a real `GET /api/profile?url=https://www.linkedin.com/in/williamhgates/`).
+
 ```json
 {
   "publicIdentifier": "williamhgates",
