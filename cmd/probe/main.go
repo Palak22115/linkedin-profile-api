@@ -55,7 +55,7 @@ func main() {
 func liveFetch(input string) (*linkedin.RawProfile, string) {
 	cfg, err := config.Load()
 	must(err)
-	c := linkedin.New(cfg.Cookie, cfg.CSRFToken(), cfg.UserAgent)
+	c := linkedin.New(cfg.Cookie, cfg.CSRFToken(), cfg.UserAgent, cfg.Proxy)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()

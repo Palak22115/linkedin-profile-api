@@ -107,6 +107,7 @@ The API authenticates to LinkedIn with **your own session cookie**. Use a
 | `JSESSIONID` | — | Falls back to the value inside `LINKEDIN_COOKIE` |
 | `API_KEY` | recommended | Clients must send it as `X-API-Key`. Empty = auth disabled |
 | `LINKEDIN_USER_AGENT` | — | Defaults to a recent Chrome UA; ideally match your browser |
+| `LINKEDIN_PROXY` | — | Outbound proxy URL for LinkedIn calls (e.g. `http://user:pass@host:port`). Recommended on a cloud host — see [Known limitations](#known-limitations). Falls back to `HTTPS_PROXY`. |
 | `CACHE_TTL` | — | Default `24h`. `0` disables the in‑memory cache |
 | `PORT` | — | Default `8080` (Render injects its own) |
 
@@ -347,10 +348,20 @@ build to a distroless static image.
   Agreement. Use a burner account. See [Legal](#legal--terms-of-service).
 - **Cookie lifetime.** The session cookie must be refreshed manually when it
   expires or gets flagged (`503 session_expired`).
-- **Rate limits & anti‑bot.** From datacenter IPs (including most cloud hosts)
-  LinkedIn blocks more aggressively. The pacing + cache mitigate this but a
-  burst of unique profiles can still trip `429` / `502`. A residential/mobile
-  proxy for the outbound calls would harden this; not included here.
+- **Rate limits & anti‑bot.** From datacenter IPs (including most cloud hosts
+  such as Render/AWS/GCP) LinkedIn rate‑limits aggressively — a fresh profile
+  fetch on the hosted instance often returns `429 upstream_rate_limited` /
+  `502 upstream_blocked`. Mitigations built in:
+  - **paced requests** (~1.5 s + jitter), serialised, never bursting;
+  - **exponential backoff** — a `429` is retried up to 3× (3 s → 6 s → 12 s,
+    honouring `Retry-After`) before surfacing;
+  - **24 h response cache** — a profile is fetched once, then served from memory;
+  - **`LINKEDIN_PROXY`** env var — point it at a residential/mobile proxy and
+    the outbound LinkedIn calls route through it. This is the reliable fix for a
+    cloud deployment; the endpoint works without one but with a higher block rate.
+
+  The service also runs reliably from a normal residential connection with no
+  proxy (see [Quick start](#quick-start)).
 - **Connection‑gated sections.** LinkedIn hides **skills**, **languages**, and
   sometimes **certifications** for people you are not connected to. When a
   section can't be retrieved the response sets `"partial": true` and lists it in

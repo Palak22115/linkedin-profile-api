@@ -22,3 +22,8 @@ services:
         sync: false
       - key: JSESSIONID
         sync: false
+      # Strongly recommended on a cloud host — a residential/mobile proxy URL.
+      # LinkedIn rate-limits datacenter IPs (incl. Render). Without it, fresh
+      # profile fetches often return 429/502 (cached results still serve).
+      - key: LINKEDIN_PROXY
+        sync: false

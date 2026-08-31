@@ -17,6 +17,7 @@ type Config struct {
 	Cookie    string        // full Cookie header value for www.linkedin.com
 	JSESSION  string        // JSESSIONID value; csrf-token header is this without surrounding quotes
 	UserAgent string        // browser User-Agent used for all LinkedIn requests
+	Proxy     string        // optional outbound proxy URL for LinkedIn requests
 	CacheTTL  time.Duration // 0 disables the response cache
 }
 
@@ -37,6 +38,7 @@ func Load() (Config, error) {
 		Cookie:    os.Getenv("LINKEDIN_COOKIE"),
 		JSESSION:  os.Getenv("JSESSIONID"),
 		UserAgent: envOr("LINKEDIN_USER_AGENT", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"),
+		Proxy:     firstEnv("LINKEDIN_PROXY", "HTTPS_PROXY", "https_proxy"),
 	}
 
 	if ttl := os.Getenv("CACHE_TTL"); ttl != "" {
@@ -66,6 +68,16 @@ func envOr(key, def string) string {
 		return v
 	}
 	return def
+}
+
+// firstEnv returns the value of the first set (non-empty) env var among keys.
+func firstEnv(keys ...string) string {
+	for _, k := range keys {
+		if v := os.Getenv(k); v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 // cookieValue extracts a single cookie's value from a Cookie header string.

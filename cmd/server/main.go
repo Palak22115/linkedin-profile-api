@@ -26,7 +26,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	client := linkedin.New(cfg.Cookie, cfg.CSRFToken(), cfg.UserAgent)
+	client := linkedin.New(cfg.Cookie, cfg.CSRFToken(), cfg.UserAgent, cfg.Proxy)
 	scraper := scrape.New(client, cfg.CacheTTL)
 	handler := api.New(scraper, cfg.APIKey)
 

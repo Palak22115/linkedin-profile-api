@@ -5,10 +5,12 @@ package linkedin
 
 import (
 	"context"
+	"errors"
 	"io"
 	"math/rand"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -18,8 +20,12 @@ const (
 	baseURL   = "https://www.linkedin.com"
 	voyager   = baseURL + "/voyager/api"
 	acceptLI  = "application/vnd.linkedin.normalized+json+2.1"
-	minGap    = 1000 * time.Millisecond // minimum spacing between LinkedIn requests
-	maxGapJit = 500 * time.Millisecond  // added random jitter, [0, maxGapJit)
+	minGap    = 1200 * time.Millisecond // minimum spacing between LinkedIn requests
+	maxGapJit = 800 * time.Millisecond  // added random jitter, [0, maxGapJit)
+
+	maxRetries  = 3               // extra attempts on a 429 / 999
+	backoffBase = 3 * time.Second // 3s, 6s, 12s (+ jitter), capped by backoffMax
+	backoffMax  = 45 * time.Second
 )
 
 // volatileCookies are the ones LinkedIn rotates and that matter for the
@@ -46,10 +52,19 @@ type Client struct {
 }
 
 // New builds a Client from an already-assembled Cookie header, the CSRF token
-// (JSESSIONID without quotes) and a browser User-Agent string.
-func New(cookie, csrfToken, userAgent string) *Client {
+// (JSESSIONID without quotes), a browser User-Agent string, and an optional
+// outbound proxy URL (e.g. a residential proxy — LinkedIn aggressively blocks
+// datacenter IP ranges). An empty proxyURL falls back to HTTP(S)_PROXY env.
+func New(cookie, csrfToken, userAgent, proxyURL string) *Client {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	if proxyURL != "" {
+		if pu, err := url.Parse(proxyURL); err == nil {
+			transport.Proxy = http.ProxyURL(pu)
+		}
+	}
 	hc := &http.Client{
-		Timeout: 30 * time.Second,
+		Timeout:   30 * time.Second,
+		Transport: transport,
 		// Do not follow redirects: LinkedIn's anti-bot edge answers with a
 		// 302 to the same URL, which we want to detect rather than loop on.
 		CheckRedirect: func(*http.Request, []*http.Request) error {
@@ -154,40 +169,76 @@ func (c *Client) getRaw(ctx context.Context, absURL string, htmlHeaders bool) ([
 	} else {
 		c.voyagerHeaders(req)
 	}
-	c.pace()
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return nil, nil, err
-	}
-	defer resp.Body.Close()
-	c.absorbSetCookie(resp)
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
-	if err != nil {
-		return nil, resp, err
-	}
-	if cerr := classify(resp, body, absURL); cerr != nil {
-		return body, resp, cerr
-	}
-	return body, resp, nil
+	return c.send(req, absURL)
 }
 
-// do sends an already-built request through pacing + response classification.
+// do sends an already-built request through pacing, retry and classification.
 func (c *Client) do(req *http.Request, path string) ([]byte, error) {
-	c.pace()
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return nil, err
+	body, _, err := c.send(req, path)
+	return body, err
+}
+
+// send paces the request, executes it, refreshes rotated cookies, classifies
+// the response, and retries a 429 / 999 with exponential backoff (honouring a
+// Retry-After header) until the context deadline or maxRetries is reached.
+func (c *Client) send(req *http.Request, path string) ([]byte, *http.Response, error) {
+	ctx := req.Context()
+	var lastBody []byte
+	var lastResp *http.Response
+	var lastErr error
+
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		c.pace()
+		resp, err := c.http.Do(req.Clone(ctx))
+		if err != nil {
+			return nil, nil, err
+		}
+		c.absorbSetCookie(resp)
+		body, rerr := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+		resp.Body.Close()
+		if rerr != nil {
+			return nil, resp, rerr
+		}
+
+		cerr := classify(resp, body, path)
+		if !errors.Is(cerr, ErrRateLimited) {
+			return body, resp, cerr
+		}
+		lastBody, lastResp, lastErr = body, resp, cerr
+
+		if attempt == maxRetries {
+			break
+		}
+		wait := retryAfter(resp, backoffFor(attempt, c.rnd))
+		select {
+		case <-ctx.Done():
+			return lastBody, lastResp, ctx.Err()
+		case <-time.After(wait):
+		}
 	}
-	defer resp.Body.Close()
-	c.absorbSetCookie(resp)
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
-	if err != nil {
-		return nil, err
+	return lastBody, lastResp, lastErr
+}
+
+// backoffFor returns backoffBase * 2^attempt plus up to 1s jitter, capped.
+func backoffFor(attempt int, rnd *rand.Rand) time.Duration {
+	d := backoffBase << attempt
+	if d > backoffMax {
+		d = backoffMax
 	}
-	if cerr := classify(resp, body, path); cerr != nil {
-		return body, cerr
+	return d + time.Duration(rnd.Int63n(int64(time.Second)))
+}
+
+// retryAfter honours a numeric Retry-After header (seconds) when it is larger
+// than our computed backoff; otherwise it uses the backoff.
+func retryAfter(resp *http.Response, fallback time.Duration) time.Duration {
+	if v := resp.Header.Get("Retry-After"); v != "" {
+		if secs, err := strconv.Atoi(strings.TrimSpace(v)); err == nil && secs > 0 {
+			if d := time.Duration(secs) * time.Second; d > fallback && d <= backoffMax {
+				return d
+			}
+		}
 	}
-	return body, nil
+	return fallback
 }
 
 func (c *Client) voyagerHeaders(req *http.Request) {
