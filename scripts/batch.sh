@@ -66,6 +66,8 @@ for t in "${targets[@]}"; do
     err=$(printf '%s' "$json" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{console.log(JSON.parse(s).error.code)}catch{console.log("?")}})' 2>/dev/null)
     printf '%-38s %-6s %s\n' "$slug" "$code" "$err"
   fi
+  # space out cold-cache fetches so we don't burst LinkedIn
+  [ "${#targets[@]}" -gt 1 ] && sleep "${BATCH_GAP:-12}"
 done
 
 echo
