@@ -1,0 +1,7 @@
+# One LinkedIn profile URL (or bare vanity slug) per line.
+# Lines starting with # and blank lines are ignored.
+# Run:  bash scripts/batch.sh
+https://www.linkedin.com/in/williamhgates/
+https://www.linkedin.com/in/priyanka-singh-76a3b1266/
+https://www.linkedin.com/in/reena-mandal-6493a2165/
+https://www.linkedin.com/in/vidhi-soni-3492b3374/
