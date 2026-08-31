@@ -14,6 +14,14 @@ GET /api/profile?url=https://www.linkedin.com/in/williamhgates/
 X-API-Key: <your key>
 ```
 
+**Live instance:** `https://linkedin-profile-api-ecli.onrender.com`
+(free tier — first request after ~15 min idle cold-starts in ~30–60 s)
+
+```bash
+curl -s -H "X-API-Key: <key>" \
+  "https://linkedin-profile-api-ecli.onrender.com/api/profile?url=https://www.linkedin.com/in/williamhgates/"
+```
+
 ---
 
 ## Contents
@@ -145,7 +153,7 @@ docker run -p 8080:8080 --env-file .env linkedin-profile-api
 
 ```bash
 curl -s -H "X-API-Key: secret" \
-  "https://your-api.onrender.com/api/profile?url=https://www.linkedin.com/in/williamhgates/"
+  "https://linkedin-profile-api-ecli.onrender.com/api/profile?url=https://www.linkedin.com/in/williamhgates/"
 ```
 
 #### Example response (truncated)
