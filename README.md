@@ -11,16 +11,18 @@ stack.
 
 ```
 GET /api/profile?url=https://www.linkedin.com/in/williamhgates/
-X-API-Key: <your key>
 ```
 
-**Live instance:** `https://linkedin-profile-api-ecli.onrender.com`
-(free tier — first request after ~15 min idle cold-starts in ~30–60 s)
+**Live instance:** https://linkedin-profile-api-ecli.onrender.com
+(free tier — the first request after ~15 min idle cold-starts in ~30–60 s;
+API-key auth is disabled on this instance so it can be tried without a header)
 
 ```bash
-curl -s -H "X-API-Key: <key>" \
-  "https://linkedin-profile-api-ecli.onrender.com/api/profile?url=https://www.linkedin.com/in/williamhgates/"
+curl -s "https://linkedin-profile-api-ecli.onrender.com/api/profile?url=https://www.linkedin.com/in/williamhgates/"
 ```
+
+Optional `X-API-Key` auth is supported — set the `API_KEY` env var to enable it
+(see [Configuration](#configuration--getting-the-linkedin-cookie)).
 
 ---
 
