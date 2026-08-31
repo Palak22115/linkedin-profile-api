@@ -8,7 +8,6 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
-	"net/http/cookiejar"
 	"net/url"
 	"strings"
 	"sync"
@@ -23,13 +22,23 @@ const (
 	maxGapJit = 500 * time.Millisecond  // added random jitter, [0, maxGapJit)
 )
 
+// volatileCookies are the ones LinkedIn rotates and that matter for the
+// anti-bot edge; we refresh them from Set-Cookie responses.
+var volatileCookies = map[string]bool{"__cf_bm": true, "lidc": true, "bcookie": true, "li_at": true, "JSESSIONID": true}
+
 // Client talks to the Voyager API. It is safe for concurrent use; requests are
 // serialised through a pacing lock so we never burst LinkedIn.
 type Client struct {
 	http      *http.Client
-	cookie    string
 	csrf      string
 	userAgent string
+
+	// cookies holds every cookie as a raw name→value pair (values may contain
+	// '"', which the stdlib cookie jar rejects, so we manage the Cookie header
+	// ourselves). Refreshed from Set-Cookie on volatile names.
+	cookieMu sync.RWMutex
+	cookies  map[string]string
+	order    []string
 
 	mu   sync.Mutex
 	last time.Time
@@ -38,46 +47,73 @@ type Client struct {
 
 // New builds a Client from an already-assembled Cookie header, the CSRF token
 // (JSESSIONID without quotes) and a browser User-Agent string.
-//
-// The seed cookie is loaded into a cookie jar so that short-lived cookies
-// LinkedIn rotates (notably __cf_bm, ~30 min, and lidc) are refreshed from
-// Set-Cookie responses instead of going stale — important for a long-running
-// hosted deployment.
 func New(cookie, csrfToken, userAgent string) *Client {
-	jar, _ := cookiejar.New(nil)
-	if u, err := url.Parse(baseURL); err == nil {
-		jar.SetCookies(u, parseCookieHeader(cookie))
-	}
 	hc := &http.Client{
 		Timeout: 30 * time.Second,
-		Jar:     jar,
 		// Do not follow redirects: LinkedIn's anti-bot edge answers with a
 		// 302 to the same URL, which we want to detect rather than loop on.
 		CheckRedirect: func(*http.Request, []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
 	}
-	return &Client{
+	c := &Client{
 		http:      hc,
-		cookie:    cookie,
 		csrf:      csrfToken,
 		userAgent: userAgent,
+		cookies:   map[string]string{},
 		rnd:       rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
-}
-
-// parseCookieHeader turns a "k=v; k2=v2" Cookie header into []*http.Cookie.
-func parseCookieHeader(header string) []*http.Cookie {
-	var out []*http.Cookie
-	for _, part := range strings.Split(header, ";") {
+	for _, part := range strings.Split(cookie, ";") {
 		part = strings.TrimSpace(part)
 		k, v, ok := strings.Cut(part, "=")
-		if !ok || k == "" {
+		if !ok || strings.TrimSpace(k) == "" {
 			continue
 		}
-		out = append(out, &http.Cookie{Name: strings.TrimSpace(k), Value: strings.TrimSpace(v)})
+		k = strings.TrimSpace(k)
+		if _, seen := c.cookies[k]; !seen {
+			c.order = append(c.order, k)
+		}
+		c.cookies[k] = strings.TrimSpace(v)
 	}
-	return out
+	return c
+}
+
+// cookieHeader renders the current cookie set as a Cookie header value.
+func (c *Client) cookieHeader() string {
+	c.cookieMu.RLock()
+	defer c.cookieMu.RUnlock()
+	var b strings.Builder
+	for i, k := range c.order {
+		if i > 0 {
+			b.WriteString("; ")
+		}
+		b.WriteString(k)
+		b.WriteByte('=')
+		b.WriteString(c.cookies[k])
+	}
+	return b.String()
+}
+
+// absorbSetCookie updates volatile cookies (e.g. __cf_bm, lidc) from a response,
+// keeping the raw value verbatim.
+func (c *Client) absorbSetCookie(resp *http.Response) {
+	lines := resp.Header["Set-Cookie"]
+	if len(lines) == 0 {
+		return
+	}
+	c.cookieMu.Lock()
+	defer c.cookieMu.Unlock()
+	for _, line := range lines {
+		pair, _, _ := strings.Cut(line, ";")
+		k, v, ok := strings.Cut(strings.TrimSpace(pair), "=")
+		if !ok || !volatileCookies[k] || v == "" || strings.Contains(v, "delete") {
+			continue
+		}
+		if _, seen := c.cookies[k]; !seen {
+			c.order = append(c.order, k)
+		}
+		c.cookies[k] = v
+	}
 }
 
 // pace blocks until at least minGap (+jitter) has elapsed since the last request.
@@ -124,6 +160,7 @@ func (c *Client) getRaw(ctx context.Context, absURL string, htmlHeaders bool) ([
 		return nil, nil, err
 	}
 	defer resp.Body.Close()
+	c.absorbSetCookie(resp)
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
 	if err != nil {
 		return nil, resp, err
@@ -142,6 +179,7 @@ func (c *Client) do(req *http.Request, path string) ([]byte, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
+	c.absorbSetCookie(resp)
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
 	if err != nil {
 		return nil, err
@@ -155,6 +193,7 @@ func (c *Client) do(req *http.Request, path string) ([]byte, error) {
 func (c *Client) voyagerHeaders(req *http.Request) {
 	h := req.Header
 	h.Set("accept", acceptLI)
+	h.Set("cookie", c.cookieHeader())
 	h.Set("csrf-token", c.csrf)
 	h.Set("x-restli-protocol-version", "2.0.0")
 	h.Set("x-li-lang", "en_US")
@@ -167,6 +206,7 @@ func (c *Client) voyagerHeaders(req *http.Request) {
 func (c *Client) htmlHeaders(req *http.Request) {
 	h := req.Header
 	h.Set("accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
+	h.Set("cookie", c.cookieHeader())
 	h.Set("user-agent", c.userAgent)
 	h.Set("accept-language", "en-US,en;q=0.9")
 	h.Set("upgrade-insecure-requests", "1")
