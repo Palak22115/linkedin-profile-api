@@ -8,3 +8,11 @@ recon/*.json
 
 # recon / scratch (contains scraped data)
 /recon/
+
+# stray curl/test output at repo root
+/out.json
+/r.json
+/live.json
+/resp.json
+/t.json
+/v.json
