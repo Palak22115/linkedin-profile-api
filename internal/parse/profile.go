@@ -102,10 +102,10 @@ func applyCore(p *model.Profile, raw json.RawMessage, html []byte) error {
 	if d.PublicIdentifier != "" {
 		p.PublicIdentifier = d.PublicIdentifier
 	}
-	p.FirstName = d.FirstName
-	p.LastName = d.LastName
-	p.FullName = strings.TrimSpace(d.FirstName + " " + d.LastName)
-	p.Headline = d.Headline
+	p.FirstName = oneLine(d.FirstName)
+	p.LastName = oneLine(d.LastName)
+	p.FullName = oneLine(d.FirstName + " " + d.LastName)
+	p.Headline = oneLine(d.Headline)
 	p.About = normalizeText(d.Summary)
 	p.Premium = d.Premium
 	p.Influencer = d.Influencer
@@ -224,11 +224,39 @@ func cleanLoc(s, headline string) string {
 	return s
 }
 
-// normalizeText collapses LinkedIn's \r\n line endings.
+// normalizeText normalises LinkedIn's \r\n line endings for multi-line fields
+// (about, descriptions) while preserving paragraph breaks.
 func normalizeText(s string) string {
 	s = strings.ReplaceAll(s, "\r\n", "\n")
 	s = strings.ReplaceAll(s, "\r", "\n")
 	return strings.TrimSpace(s)
+}
+
+// oneLine flattens a value that should be a single line: stray line breaks that
+// members sometimes paste into titles/names ("1\rst position") are collapsed to
+// single spaces.
+func oneLine(s string) string {
+	if !strings.ContainsAny(s, "\r\n\t") {
+		return strings.TrimSpace(s)
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	prevSpace := false
+	for _, r := range s {
+		if r == '\r' || r == '\n' || r == '\t' {
+			r = ' '
+		}
+		if r == ' ' {
+			if prevSpace {
+				continue
+			}
+			prevSpace = true
+		} else {
+			prevSpace = false
+		}
+		b.WriteRune(r)
+	}
+	return strings.TrimSpace(b.String())
 }
 
 // ---------- shared date helpers ----------
@@ -298,10 +326,10 @@ func applyExperience(p *model.Profile, raw json.RawMessage) {
 			loc = r.GeoLocationName
 		}
 		pos := model.Position{
-			Title:       strings.TrimSpace(r.Title),
-			CompanyName: strings.TrimSpace(r.CompanyName),
+			Title:       oneLine(r.Title),
+			CompanyName: oneLine(r.CompanyName),
 			CompanyURN:  r.CompanyURN,
-			Location:    strings.TrimSpace(loc),
+			Location:    oneLine(loc),
 			Description: normalizeText(r.Description),
 			DateRange:   dr(r.DateRange),
 		}
@@ -327,11 +355,11 @@ func applyEducation(p *model.Profile, raw json.RawMessage) {
 			return
 		}
 		p.Education = append(p.Education, model.Education{
-			SchoolName:   strings.TrimSpace(r.SchoolName),
+			SchoolName:   oneLine(r.SchoolName),
 			SchoolURN:    r.SchoolURN,
-			DegreeName:   strings.TrimSpace(r.DegreeName),
-			FieldOfStudy: strings.TrimSpace(r.FieldOfStudy),
-			Grade:        strings.TrimSpace(r.Grade),
+			DegreeName:   oneLine(r.DegreeName),
+			FieldOfStudy: oneLine(r.FieldOfStudy),
+			Grade:        oneLine(r.Grade),
 			Activities:   normalizeText(r.Activities),
 			Description:  normalizeText(r.Description),
 			DateRange:    dr(r.DateRange),
@@ -345,10 +373,10 @@ func applySkills(p *model.Profile, raw json.RawMessage) {
 	}
 	each(raw, "com.linkedin.voyager.dash.identity.profile.Skill", func(e json.RawMessage) {
 		var r rawSkill
-		if json.Unmarshal(e, &r) != nil || strings.TrimSpace(r.Name) == "" {
+		if json.Unmarshal(e, &r) != nil || oneLine(r.Name) == "" {
 			return
 		}
-		p.Skills = append(p.Skills, model.Skill{Name: strings.TrimSpace(r.Name)})
+		p.Skills = append(p.Skills, model.Skill{Name: oneLine(r.Name)})
 	})
 }
 
@@ -366,9 +394,9 @@ func applyCertifications(p *model.Profile, raw json.RawMessage) {
 			return
 		}
 		p.Certifications = append(p.Certifications, model.Certification{
-			Name:          strings.TrimSpace(r.Name),
-			Authority:     strings.TrimSpace(r.Authority),
-			LicenseNumber: strings.TrimSpace(r.LicenseNumber),
+			Name:          oneLine(r.Name),
+			Authority:     oneLine(r.Authority),
+			LicenseNumber: oneLine(r.LicenseNumber),
 			URL:           strings.TrimSpace(r.URL),
 			DateRange:     dr(r.DateRange),
 		})
@@ -382,11 +410,11 @@ func applyLanguages(p *model.Profile, raw json.RawMessage) {
 	}
 	each(raw, "com.linkedin.voyager.dash.identity.profile.Language", func(e json.RawMessage) {
 		var r rawLang
-		if json.Unmarshal(e, &r) != nil || strings.TrimSpace(r.Name) == "" {
+		if json.Unmarshal(e, &r) != nil || oneLine(r.Name) == "" {
 			return
 		}
 		p.Languages = append(p.Languages, model.Language{
-			Name:        strings.TrimSpace(r.Name),
+			Name:        oneLine(r.Name),
 			Proficiency: humanizeEnum(r.Proficiency),
 		})
 	})
@@ -410,7 +438,7 @@ func applyProjects(p *model.Profile, raw json.RawMessage) {
 			name = r.Name
 		}
 		p.Projects = append(p.Projects, model.Project{
-			Name:        strings.TrimSpace(name),
+			Name:        oneLine(name),
 			Description: normalizeText(r.Description),
 			URL:         strings.TrimSpace(r.URL),
 			DateRange:   dr(r.DateRange),
@@ -432,8 +460,8 @@ func applyVolunteering(p *model.Profile, raw json.RawMessage) {
 			return
 		}
 		p.Volunteering = append(p.Volunteering, model.Volunteering{
-			Role:         strings.TrimSpace(r.Role),
-			Organization: strings.TrimSpace(r.CompanyName),
+			Role:         oneLine(r.Role),
+			Organization: oneLine(r.CompanyName),
 			Cause:        humanizeEnum(r.Cause),
 			Description:  normalizeText(r.Description),
 			DateRange:    dr(r.DateRange),
@@ -454,8 +482,8 @@ func applyHonors(p *model.Profile, raw json.RawMessage) {
 			return
 		}
 		p.Honors = append(p.Honors, model.Honor{
-			Title:       strings.TrimSpace(r.Title),
-			Issuer:      strings.TrimSpace(r.Issuer),
+			Title:       oneLine(r.Title),
+			Issuer:      oneLine(r.Issuer),
 			Description: normalizeText(r.Description),
 			Date:        ym(r.IssuedOn),
 		})
@@ -476,8 +504,8 @@ func applyPublications(p *model.Profile, raw json.RawMessage) {
 			return
 		}
 		p.Publications = append(p.Publications, model.Publication{
-			Name:        strings.TrimSpace(r.Name),
-			Publisher:   strings.TrimSpace(r.Publisher),
+			Name:        oneLine(r.Name),
+			Publisher:   oneLine(r.Publisher),
 			Description: normalizeText(r.Description),
 			URL:         strings.TrimSpace(r.URL),
 			Date:        ym(r.PublishedOn),
@@ -492,12 +520,12 @@ func applyCourses(p *model.Profile, raw json.RawMessage) {
 	}
 	each(raw, "com.linkedin.voyager.dash.identity.profile.Course", func(e json.RawMessage) {
 		var r rawCourse
-		if json.Unmarshal(e, &r) != nil || strings.TrimSpace(r.Name) == "" {
+		if json.Unmarshal(e, &r) != nil || oneLine(r.Name) == "" {
 			return
 		}
 		p.Courses = append(p.Courses, model.Course{
-			Name:   strings.TrimSpace(r.Name),
-			Number: strings.TrimSpace(r.Number),
+			Name:   oneLine(r.Name),
+			Number: oneLine(r.Number),
 		})
 	})
 }

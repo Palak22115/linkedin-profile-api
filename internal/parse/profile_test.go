@@ -150,7 +150,7 @@ func TestBuild_RicherSections(t *testing.T) {
 		  "name":"Financial Accounting from ILLINOIS","number":null}]}`,
 		"profileHonors": `{"data":{"*elements":["urn:li:fsd_profileHonor:(H,1)"]},"included":[
 		 {"$type":"com.linkedin.voyager.dash.identity.profile.Honor","entityUrn":"urn:li:fsd_profileHonor:(H,1)",
-		  "title":"1st position in Volleyball tournament","issuer":null,"issuedOn":{"month":3,"year":2022}}]}`,
+		  "title":"1\rst position\r\nin  Volleyball tournament","issuer":null,"issuedOn":{"month":3,"year":2022}}]}`,
 	}, "")
 
 	p, err := Build(raw, "u")
@@ -170,6 +170,11 @@ func TestBuild_RicherSections(t *testing.T) {
 	}
 	if len(p.Honors) != 1 || p.Honors[0].Date == nil || p.Honors[0].Date.Year != 2022 {
 		t.Errorf("honor: %+v", p.Honors)
+	}
+	// stray \r / \r\n and double spaces that members paste into one-line
+	// fields are flattened to single spaces
+	if p.Honors[0].Title != "1 st position in Volleyball tournament" {
+		t.Errorf("honor title not flattened: %q", p.Honors[0].Title)
 	}
 }
 
