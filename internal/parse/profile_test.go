@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/palak-kasoundhan/linkedin-profile-api/internal/linkedin"
+	"github.com/Palak22115/linkedin-profile-api/internal/linkedin"
 )
 
 // fixtures below mirror the real identity/dash/* response shapes verified

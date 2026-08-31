@@ -34,7 +34,7 @@ X-API-Key: <your key>
 Requirements: **Go 1.22+**. No external Go dependencies.
 
 ```bash
-git clone https://github.com/palak-kasoundhan/linkedin-profile-api.git
+git clone https://github.com/Palak22115/linkedin-profile-api.git
 cd linkedin-profile-api
 
 cp .env.example .env

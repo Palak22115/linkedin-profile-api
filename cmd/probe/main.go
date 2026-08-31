@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/palak-kasoundhan/linkedin-profile-api/internal/config"
-	"github.com/palak-kasoundhan/linkedin-profile-api/internal/linkedin"
-	"github.com/palak-kasoundhan/linkedin-profile-api/internal/parse"
+	"github.com/Palak22115/linkedin-profile-api/internal/config"
+	"github.com/Palak22115/linkedin-profile-api/internal/linkedin"
+	"github.com/Palak22115/linkedin-profile-api/internal/parse"
 )
 
 func main() {

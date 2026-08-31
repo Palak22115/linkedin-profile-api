@@ -5,7 +5,7 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/palak-kasoundhan/linkedin-profile-api/internal/linkedin"
+	"github.com/Palak22115/linkedin-profile-api/internal/linkedin"
 )
 
 // errorBody is the JSON shape returned for every non-2xx response.

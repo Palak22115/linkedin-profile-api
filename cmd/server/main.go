@@ -11,10 +11,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/palak-kasoundhan/linkedin-profile-api/internal/api"
-	"github.com/palak-kasoundhan/linkedin-profile-api/internal/config"
-	"github.com/palak-kasoundhan/linkedin-profile-api/internal/linkedin"
-	"github.com/palak-kasoundhan/linkedin-profile-api/internal/scrape"
+	"github.com/Palak22115/linkedin-profile-api/internal/api"
+	"github.com/Palak22115/linkedin-profile-api/internal/config"
+	"github.com/Palak22115/linkedin-profile-api/internal/linkedin"
+	"github.com/Palak22115/linkedin-profile-api/internal/scrape"
 )
 
 func main() {

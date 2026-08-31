@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/palak-kasoundhan/linkedin-profile-api/internal/linkedin"
-	"github.com/palak-kasoundhan/linkedin-profile-api/internal/model"
+	"github.com/Palak22115/linkedin-profile-api/internal/linkedin"
+	"github.com/Palak22115/linkedin-profile-api/internal/model"
 )
 
 type stubFetcher struct {
