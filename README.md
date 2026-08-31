@@ -155,8 +155,11 @@ docker run -p 8080:8080 --env-file .env linkedin-profile-api
 #### Example request
 
 ```bash
-curl -s -H "X-API-Key: secret" \
-  "https://linkedin-profile-api-ecli.onrender.com/api/profile?url=https://www.linkedin.com/in/williamhgates/"
+# the live instance has API-key auth disabled, so no header is needed
+curl -s "https://linkedin-profile-api-ecli.onrender.com/api/profile?url=https://www.linkedin.com/in/williamhgates/"
+
+# when API_KEY is configured (e.g. locally), add the header:
+curl -s -H "X-API-Key: <key>" "http://localhost:8080/api/profile?url=https://www.linkedin.com/in/williamhgates/"
 ```
 
 #### Example response (truncated)
@@ -206,10 +209,15 @@ Full, unedited example: [`docs/sample-response.json`](docs/sample-response.json)
   "languages": [],
   "sourceUrl": "https://www.linkedin.com/in/williamhgates/",
   "retrievedAt": "2026-08-31T09:15:04Z",
-  "partial": true,
-  "notes": ["section not retrieved: skills", "section not retrieved: languages"]
+  "partial": false
 }
 ```
+
+> `skills` / `certifications` / `languages` come back empty here because Bill
+> Gates is not a connection of the backend account — LinkedIn returns those
+> sections empty for non‑connections. For a connected profile they are fully
+> populated (e.g. 30+ skills). If a section request *fails* (rather than
+> returns empty), the response sets `"partial": true` and lists it in `notes`.
 
 #### Response schema
 
@@ -324,8 +332,10 @@ GET /api/profile?url=...
 
 The client that talks to LinkedIn:
 
-- **paces every request** (≈1 s + jitter) and serialises them — bursts get the
-  session invalidated;
+- **paces every request** (≈1.5 s + jitter) and serialises them — bursts get
+  the session invalidated;
+- **retries a `429` with exponential backoff** (3 s → 6 s → 12 s, honouring
+  `Retry-After`) before giving up;
 - sends browser‑matching headers (`csrf-token`, `x-restli-protocol-version`,
   `x-li-lang`, `x-li-track`, real `User-Agent`);
 - **does not follow redirects** — a `302` back to the same URL is LinkedIn's
