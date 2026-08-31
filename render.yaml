@@ -1,0 +1,24 @@
+# Render blueprint. Deploy: push to GitHub, then "New +" -> "Blueprint" in the
+# Render dashboard and point it at this repo. Set the secret env vars (marked
+# sync: false) in the dashboard after the first deploy.
+services:
+  - type: web
+    name: linkedin-profile-api
+    runtime: docker
+    plan: free
+    region: oregon
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      # Render injects PORT automatically; the app reads it.
+      - key: CACHE_TTL
+        value: 24h
+      - key: LINKEDIN_USER_AGENT
+        value: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+      # --- secrets: set these in the Render dashboard, never commit them ---
+      - key: API_KEY
+        sync: false
+      - key: LINKEDIN_COOKIE
+        sync: false
+      - key: JSESSIONID
+        sync: false

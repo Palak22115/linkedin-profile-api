@@ -1,0 +1,10 @@
+.env
+*.db
+/bin/
+/server
+/tmp/
+recon/*.har
+recon/*.json
+
+# recon / scratch (contains scraped data)
+/recon/

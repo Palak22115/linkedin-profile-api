@@ -1,0 +1,13 @@
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+recon/
+*.md
+!README.md
+Dockerfile
+.dockerignore
+render.yaml
+bin/
+*.db
